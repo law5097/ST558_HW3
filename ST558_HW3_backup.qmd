@@ -1,0 +1,334 @@
+---
+title: "ST558_HW3 - Lee Worthington"
+format: html
+editor: visual
+---
+
+# -------------------------------------------
+# Task 1: conceptual questions
+# -------------------------------------------
+
+#### Question 1 - If your working directory is myfolder/homework/, what relative path would you specify to get the file located at myfolder/MyData.csv?
+> If the working directory is myfolder/homework/ then to get the file MyData.csv from myfolder the relative path would be '../MyData.csv'
+
+#### Question 2 - What are the major benefits of using R projects?
+> Rprojects gives you an easy way to:
+>
+> - Set a structured working directory and workspace with a specific environment for all your relevant files and objects
+> - Implement version control using git
+> - Provide reproducibility as the saved environment allows others to generate the same results
+> - Allow easier collaboration with github
+
+#### Question 3 - What is git and what is github?
+> Git is version control software, whereas github is a hosting service for git based projects
+
+#### Question 4 - what are the two main differences between a tiblle and a data.frame?
+> data.frame vs tibble
+>
+> - When printing tibbles print additional information such as the number of rows and columns
+> - Tibbles don’t coerce down to a vector when you subset to a single column using [], instead they return a tibble, unlike a data frame which coerces down to a vector
+
+#### Question 5 - rewrite the following nested function call using baseR's chaining operator
+```{r}
+#| eval: false
+
+# Original code 
+arrange(filter(select(as_tibble(iris), starts_with("Petal"), Species), Petal.Length < 1.55), Species)
+
+#New code
+iris |>
+  as_tibble() |>
+  select(starts_with("Petal"), Species) |>
+  filter(Petal.Length < 1.55) |>
+  arrange(Species)
+```
+
+#### Question 6 - what is meant by long format data and wide format data? Which is generally prefered for statistical analysis?
+> In long format each row represents a single observation and each column represents a single variable, whereas in wide format you may have multiple observations in a single row.
+  
+
+# -------------------------------------------
+# Task 2: reading delimited data
+# -------------------------------------------
+
+#### Glass data
+```{r}
+#| eval: true
+
+# load library
+library(tidyverse)
+
+# read in file
+glass_data <- read_csv(
+  'https://www4.stat.ncsu.edu/~online/datasets/glass.data',
+  col_names = c('id', 'ri', 'na', 'mg', 'al', 'si', 'k', 'ca', 'ba', 'fe', 'type_of_glass')
+)
+
+# call tibble
+glass_data
+
+# cstart chain on glass_data
+glass_data |>
+  
+  # update type_of_glass field
+  mutate(type_of_glass = ifelse(type_of_glass == 1, 'building_windows_float_processed',
+                ifelse(type_of_glass == 2, 'building_windows_non_float_processed',
+                       ifelse(type_of_glass == 3, 'vehicle_windows_float_processed',
+                              ifelse(type_of_glass == 4, 'vehicle_windows_non_float_processed',
+                                     ifelse(type_of_glass == 5, 'containers',
+                                            ifelse(type_of_glass == 6, 'tableware',
+                                                   ifelse(type_of_glass == 7, 'headlamps', NA)))))))) |>
+  
+  # filter on fe variable (& or , should work)
+  filter(fe < 0.2 & type_of_glass %in% c('tableware', 'headlamps'))
+
+```
+
+#### Yeast data
+```{r}
+#| eval: true
+
+# read in file (this data is separated by spaces (https://readr.tidyverse.org/reference/read_table.html)
+yeast_data <- read_table(
+  'https://www4.stat.ncsu.edu/~online/datasets/yeast.data',
+  col_names = c('seq_name', 'mcg', 'gvh', 'alm', 'mit', 'erl', 'pox', 'vac', 'nuc', 'class')
+)
+
+# call tibble
+yeast_data 
+
+# apply chain
+yeast_data |>
+  # filter data
+  select(-seq_name, -nuc) |>
+  # group by class
+  group_by(class) |>
+  # create new columns using mutate with summary stats using across on numeric columns
+  mutate(across(where(is.numeric), mean, .names = 'mea_{.col}')) |>
+  mutate(across(where(is.numeric), median, .names = 'median_{.col}'))
+  
+```
+
+# -------------------------------------------
+# Task 2: combining excel and delimited data
+# -------------------------------------------
+
+#### Part 1
+```{r}
+#| eval: true
+
+# load library
+library(readxl)
+
+# load data
+white_wine <- read_excel('white-wine.xlsx')
+
+# print tibble
+white_wine
+  
+```
+
+#### Part 2
+```{r}
+#| eval: true
+
+# load variable names into a tibble
+field_names <- read_excel(
+  'white-wine.xlsx',
+  sheet = excel_sheets('white-wine.xlsx')[2]
+)
+  
+# update white_wine fuse field_names vector
+colnames(white_wine) <- field_names[[1]]
+
+# print results
+white_wine
+
+```
+
+#### Part 3
+```{r}
+#| eval: true
+
+# add new column to white_wine
+white_wine <- white_wine |>
+  # add new field
+  mutate(type = 'white')
+
+```
+
+#### Part 4
+```{r}
+#| eval: true
+
+# read data
+red_wine <- read_delim(
+  'https://www4.stat.ncsu.edu/~online/datasets/red-wine.csv',
+  delim = ';'
+)
+
+# update red_wine fuse field_names vector
+colnames(red_wine) <- field_names[[1]]
+
+# add new column to white_wine
+red_wine <- red_wine |>
+  mutate(type = 'red')
+
+red_wine
+
+```
+
+#### Part 5
+```{r}
+#| eval: true
+
+# part 5 combine white and red, ?dplyr::bind_rows
+wine <- dplyr::bind_rows(white_wine, red_wine)
+
+# part 6
+wine |>
+  # filter on quality 6
+  filter(quality > 6.5 & alcohol < 132) |>
+  # sort rows by descending quality 7
+  arrange(desc(quality)) |>
+  # select specified fields
+  select(contains('acid'), alcohol, type, quality) |>
+  # mean and stddev for alcohol by quality
+  group_by(quality) |>
+  mutate(alcohol_mean = mean(alcohol), alcohol_stddev = sd(alcohol))
+```
+
+
+# -------------------------------------------
+# Task 3: database practice
+# -------------------------------------------
+
+```{r}
+#| eval: true
+
+# install library
+#install.packages('DBI')
+#install.packages('RSQLite')
+
+# load libraries
+library(DBI)
+library(RSQLite)
+
+# 1 connect to db
+con <- dbConnect(RSQLite::SQLite(), 'lahman.db')
+dbListTables(con)
+
+# 2 load data to a tibble
+teams_data <- tbl(con, 'Teams')
+
+teams_data |>
+  filter(yearID == 2015)
+
+# 3 use sql to do the same thing
+tbl(con, 
+    sql('
+    select *
+    from Teams t
+    where 1=1
+    and yearID = 2015
+    '
+))
+
+# 4 return all players in the hall of fame, the year, and the category
+hall_of_fame <- tbl(con, 
+    sql('
+    select category, playerId, yearID 
+    from HallOfFame
+    where 1=1
+    and category = "Player"
+    '
+))
+hall_of_fame
+
+# 5 combine previous data wiht the People table
+hof_players <- tbl(con, 
+    sql('
+    select 
+    hof.category,
+    
+    hof.playerId, 
+    p.nameFirst,
+    p.nameLast,
+    
+    hof.yearID 
+
+    from HallOfFame hof
+    inner join People p
+    on 1=1
+    and hof.playerID = p.playerID
+    
+    where 1=1
+    and hof.category = "Player"
+    '
+))
+
+# 6 Managers table manipulation
+managers <- tbl(con,'Managers') |>
+  # select specified columns
+  select(playerID, G, W, L) |>
+  # grooup by playerID
+  group_by(playerID) |>
+  # summary stats
+  summarize(
+    # total games managed
+    G_managed = sum(G, na.rm = TRUE),
+    #total wins
+    Total_W = sum(W, na.rm = TRUE),
+    # total losses
+    Total_L = sum(L, na.rm = TRUE)
+  ) |>
+  # execute up to this point to calculate summary stats
+  collect() |>
+  # calculate win/loss percentage in a new field
+  mutate(win_percentage = Total_W/G_managed) |>
+  #mutate(loss_percentage = Total_L/G_managed) |>
+  # sort by win percentage
+  arrange(desc(win_percentage))
+
+# 7 combine results
+# pull all hof data, regardless of category
+hof <- tbl(con, 
+    sql('
+    select 
+    hof.category,
+    
+    hof.playerID, 
+    p.nameFirst,
+    p.nameLast,
+    
+    hof.yearID 
+
+    from HallOfFame hof
+    inner join People p
+    on 1=1
+    and hof.playerID = p.playerID
+    
+    where 1=1
+    '
+)) |>
+  collect()
+
+# combine the data
+combined_data <- inner_join(
+  managers,
+  hof,
+  by = c("playerID" = "playerID")
+)
+
+```
+
+
+```
+
+
+
+
+
+
+
+
